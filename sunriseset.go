@@ -4,17 +4,22 @@ package main
 
 import (
         "fmt"
+        "time"
+        "strings"
+        "strconv"
         "github.com/seldonsmule/logmsg"
         "github.com/seldonsmule/restapi"
 
 )
 
-func main() {
+type RiseSet struct {
 
-  logmsg.SetLogFile("sun.log")
+  timeRise time.Time
+  timeSet time.Time
 
-  fmt.Println("Sunriseset")
+}
 
+func getSunTimes() (time.Time, time.Time) {
 
   r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
 
@@ -59,9 +64,10 @@ func main() {
 
 
 //  fmt.Printf("--------------------------\n")
-  astroMap := r.CastMap(astroArray[1])
+  astroMap := r.CastMap(astroArray[0])
 
 // used this to figure out the names to extract the sunset/rise info - unommit to see
+
 /*
   for k, v := range astroMap {
     fmt.Println(k, "=", v)
@@ -69,12 +75,101 @@ func main() {
 */
 
 
+
 // 3. get teh value in the map
+/*
   fmt.Printf("--------------------------\n")
   fmt.Printf("sunset[%s]\n", astroMap["sunset"])
   fmt.Printf("sunrise[%s]\n", astroMap["sunrise"])
+*/
+
+  sunrise :=  r.CastString(astroMap["sunrise"])
+  sunset  :=  r.CastString(astroMap["sunset"])
+
+  now := time.Now()
 
 
+  sunrise = strings.TrimSuffix(sunrise,"AM")
+  sunset = strings.TrimSuffix(sunset,"PM")
+  //fmt.Println("Rise:", sunrise)
+  riseArray := strings.Split(sunrise, ":")
+  riseHour, _ := strconv.Atoi(riseArray[0])
+  riseMin, _ := strconv.Atoi(riseArray[1])
+  //fmt.Println(riseHour)
+  //fmt.Println(riseMin)
+  //fmt.Println("Set:", sunset)
+  setArray := strings.Split(sunset, ":")
+  setHour, _ := strconv.Atoi(setArray[0])
+  setHour += 12
+  setMin, _ := strconv.Atoi(setArray[1])
+  //fmt.Println(setHour)
+  //fmt.Println(setMin)
 
+//     func Date(year int, month Month, day, hour, min, sec, nsec int, loc *Location) Time
+
+
+  timeRise := time.Date(now.Year(),
+                    now.Month(),
+                    now.Day(),
+                    riseHour,
+                    riseMin,
+                    now.Second(),
+                    now.Nanosecond(),
+                    now.Location())
+
+  timeSet := time.Date(now.Year(),
+                    now.Month(),
+                    now.Day(),
+                    setHour,
+                    setMin,
+                    now.Second(),
+                    now.Nanosecond(),
+                    now.Location())
+
+/*
+  fmt.Println("Now:", now)
+  fmt.Println("Now:", now.Unix())
+  fmt.Println("Sunrise:", timeRise)
+  fmt.Println("Sunrise:", timeRise.Unix())
+  fmt.Println("Sunset:", timeSet)
+  fmt.Println("Sunset:", timeSet.Unix())
+*/
+
+  return timeRise, timeSet
+}
+
+func main() {
+
+  var myTimes RiseSet
+
+  logmsg.SetLogFile("sun.log")
+
+  now := time.Now()
+
+  //timeRise, timeSet := getSunTimes()
+  myTimes.timeRise, myTimes.timeSet = getSunTimes()
+
+
+/*
+  fmt.Println("Now:", now)
+  fmt.Println("Now:", now.Unix())
+  fmt.Println("Sunrise:", timeRise)
+  fmt.Println("Sunrise:", timeRise.Unix())
+  fmt.Println("Sunset:", timeSet)
+  fmt.Println("Sunset:", timeSet.Unix())
+*/
  
+  // test for after sunrise
+  if(now.After(myTimes.timeRise) && now.Before(myTimes.timeSet)){
+
+    fmt.Println("Sun has rose")
+
+  }else{
+
+    fmt.Println("Sun has set")
+
+  }
+
+
+
 }
