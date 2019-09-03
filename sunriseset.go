@@ -7,6 +7,9 @@ import (
         "time"
         "strings"
         "strconv"
+        "os"
+        "io/ioutil"
+        "encoding/json"
         "github.com/seldonsmule/logmsg"
         "github.com/seldonsmule/restapi"
 
@@ -20,6 +23,39 @@ type RiseSet struct {
 }
 
 func getSunTimes() (time.Time, time.Time) {
+
+  var astroMap map[string]interface{}
+
+  info, statErr := os.Stat("/tmp/sun.json")
+
+  if(statErr == nil){
+
+    fmt.Println("Last sun.json write - ",info.ModTime())
+
+    today := time.Now()
+
+    if(today.Day() != info.ModTime().Day()){
+      fmt.Println("not today - delete sun.json")
+      os.Remove("/tmp/sun.json")
+    }
+
+  }
+
+  jsonReadFile, openErr := os.Open("/tmp/sun.json")
+
+  if(openErr == nil){
+
+    //fmt.Println("found the file");
+
+    byteValue, _ := ioutil.ReadAll(jsonReadFile)
+
+    json.Unmarshal([]byte(byteValue), &astroMap)
+
+    jsonReadFile.Close()
+
+    //fmt.Println(astroMap["sunset"])
+
+  }else{
 
   r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
 
@@ -64,7 +100,24 @@ func getSunTimes() (time.Time, time.Time) {
 
 
 //  fmt.Printf("--------------------------\n")
-  astroMap := r.CastMap(astroArray[0])
+  astroMap = r.CastMap(astroArray[0])
+
+  jsonData, _ := json.Marshal(astroMap)
+
+  //fmt.Println(string(jsonData))
+
+  jsonWriteFile, err := os.Create("/tmp/sun.json")
+
+  if err != nil {
+     panic(err)
+  }
+  defer jsonWriteFile.Close()
+
+  jsonWriteFile.Write(jsonData)
+  jsonWriteFile.Close()
+
+  } // end else json file read
+
 
 // used this to figure out the names to extract the sunset/rise info - unommit to see
 
@@ -83,8 +136,12 @@ func getSunTimes() (time.Time, time.Time) {
   fmt.Printf("sunrise[%s]\n", astroMap["sunrise"])
 */
 
+/*
   sunrise :=  r.CastString(astroMap["sunrise"])
   sunset  :=  r.CastString(astroMap["sunset"])
+*/
+  sunrise :=  astroMap["sunrise"].(string)
+  sunset  :=  astroMap["sunset"].(string)
 
   now := time.Now()
 
@@ -140,14 +197,11 @@ func getSunTimes() (time.Time, time.Time) {
 
 func main() {
 
-  var myTimes RiseSet
-
   logmsg.SetLogFile("sun.log")
 
   now := time.Now()
 
-  //timeRise, timeSet := getSunTimes()
-  myTimes.timeRise, myTimes.timeSet = getSunTimes()
+  timeRise, timeSet := getSunTimes()
 
 
 /*
@@ -159,8 +213,11 @@ func main() {
   fmt.Println("Sunset:", timeSet.Unix())
 */
  
+  fmt.Println("Sunrise:", timeRise)
+  fmt.Println("Sunset:", timeSet)
+
   // test for after sunrise
-  if(now.After(myTimes.timeRise) && now.Before(myTimes.timeSet)){
+  if(now.After(timeRise) && now.Before(timeSet)){
 
     fmt.Println("Sun has rose")
 
