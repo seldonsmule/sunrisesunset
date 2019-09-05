@@ -82,7 +82,7 @@ func getSunTimes() (time.Time, time.Time) {
 
 // 1. Get the info as an array
 
-  astroArray := r.CastArray(r.GetValue("astronomy"))
+  astroArray := restapi.CastArray(r.GetValue("astronomy"))
 
 /*
   fmt.Printf("ArrayLength[%d]\n", len(astroArray))
@@ -100,7 +100,7 @@ func getSunTimes() (time.Time, time.Time) {
 
 
 //  fmt.Printf("--------------------------\n")
-  astroMap = r.CastMap(astroArray[0])
+  astroMap = restapi.CastMap(astroArray[0])
 
   jsonData, _ := json.Marshal(astroMap)
 
@@ -137,8 +137,8 @@ func getSunTimes() (time.Time, time.Time) {
 */
 
 /*
-  sunrise :=  r.CastString(astroMap["sunrise"])
-  sunset  :=  r.CastString(astroMap["sunset"])
+  sunrise :=  restapi.CastString(astroMap["sunrise"])
+  sunset  :=  restapi.CastString(astroMap["sunset"])
 */
   sunrise :=  astroMap["sunrise"].(string)
   sunset  :=  astroMap["sunset"].(string)
