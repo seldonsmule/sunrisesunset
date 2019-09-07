@@ -10,6 +10,7 @@ import (
         "os"
         "io/ioutil"
         "encoding/json"
+        "encoding/base64"
         "github.com/seldonsmule/logmsg"
         "github.com/seldonsmule/restapi"
 
@@ -22,30 +23,65 @@ type RiseSet struct {
 
 }
 
+func moveCamera(bSunRise bool){
+
+   //r := restapi.NewGet("sunriseset", "https://macdaddy.home.c-the-world.org:8001/++ptz/command?cameraNum=3&command=12")
+  // r := restapi.NewGet("sunriseset", "https://192.168.2.39:8001/++ptz/command?cameraNum=3&command=17")
+
+  url := "https://macdaddy.home.c-the-world.org:8001/++ptz/command?cameraNum=3&command="
+
+
+  if(bSunRise){
+    fmt.Println("Sun rise - moving camera to street")
+
+    url = fmt.Sprintf("%s12", url)
+  }else{
+    fmt.Println("Sun set - moving camera to garage")
+    url = fmt.Sprintf("%s17", url)
+  }
+
+  r := restapi.NewGet("sunriseset", url)
+
+  r.SetBasicAccessToken(getToken(false))
+
+  //r.DebugOn()
+
+  restapi.TurnOffCertValidation()
+
+  if(r.Send()){
+
+    //r.Dump()
+
+  }
+
+}
+
 func getSunTimes() (time.Time, time.Time) {
 
   var astroMap map[string]interface{}
 
-  info, statErr := os.Stat("/tmp/sun.json")
+  jsonfile := fmt.Sprintf("%s/tmp/sun.json", os.Getenv("HOME"))
+
+  info, statErr := os.Stat(jsonfile)
 
   if(statErr == nil){
 
-    fmt.Println("Last sun.json write - ",info.ModTime())
+    logmsg.Print(logmsg.Info, "Last ", jsonfile, " write - ",info.ModTime())
 
     today := time.Now()
 
     if(today.Day() != info.ModTime().Day()){
-      fmt.Println("not today - delete sun.json")
-      os.Remove("/tmp/sun.json")
+      logmsg.Print(logmsg.Info, "not today - delete sun.json")
+      os.Remove(jsonfile)
     }
 
   }
 
-  jsonReadFile, openErr := os.Open("/tmp/sun.json")
+  jsonReadFile, openErr := os.Open(jsonfile)
 
   if(openErr == nil){
 
-    //fmt.Println("found the file");
+    logmsg.Print(logmsg.Debug01, "found the file");
 
     byteValue, _ := ioutil.ReadAll(jsonReadFile)
 
@@ -53,11 +89,13 @@ func getSunTimes() (time.Time, time.Time) {
 
     jsonReadFile.Close()
 
-    //fmt.Println(astroMap["sunset"])
+    logmsg.Print(logmsg.Debug02, astroMap["sunset"])
 
   }else{
 
-  r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
+   logmsg.Print(logmsg.Info,"Need new cache file: ", jsonfile)
+
+   r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
 
 
 //  r.DebugOn()
@@ -70,11 +108,9 @@ func getSunTimes() (time.Time, time.Time) {
 
   }
 
-/*
-  fmt.Printf("--------------------------\n")
-  fmt.Printf("astronomy[%s]\n", r.GetValue("astronomy"))
-  fmt.Printf("--------------------------\n")
-*/
+
+  logmsg.Print(logmsg.Debug02, "astronomy: ", r.GetValue("astronomy"))
+
 
 // here is the deal - this stupid thing is an array of maps, not
 // something considered in my original Telsa use case.  here is how to
@@ -84,9 +120,9 @@ func getSunTimes() (time.Time, time.Time) {
 
   astroArray := restapi.CastArray(r.GetValue("astronomy"))
 
-/*
-  fmt.Printf("ArrayLength[%d]\n", len(astroArray))
-*/
+
+  logmsg.Print(logmsg.Debug02, "ArrayLength: ", len(astroArray))
+
 
 // -- used this for look to find the array we are looking for. uncommit to see
 /*
@@ -106,7 +142,7 @@ func getSunTimes() (time.Time, time.Time) {
 
   //fmt.Println(string(jsonData))
 
-  jsonWriteFile, err := os.Create("/tmp/sun.json")
+  jsonWriteFile, err := os.Create(jsonfile)
 
   if err != nil {
      panic(err)
@@ -195,35 +231,130 @@ func getSunTimes() (time.Time, time.Time) {
   return timeRise, timeSet
 }
 
+func help(){
+
+  fmt.Println("sunsetrise [options] [auth userid:password] | [show] | [day] | [\n")
+  fmt.Println("With no parms - execute sunrise/set test and camera move\n")
+  fmt.Println("auth userid:password - Base64 encodes and saves userid and password\n");
+  fmt.Println("day - Move camera to day possition\n");
+  fmt.Println("night - Move camera to night possition\n");
+  fmt.Println("help - Display this\n");
+  
+
+}
+
+func buildAuthToken(authString string){
+
+  encodeFileName := fmt.Sprintf("%s/tmp/.sun.token", os.Getenv("HOME"))
+
+  fmt.Println(authString)
+  sEnc := base64.StdEncoding.EncodeToString([]byte(authString))
+  fmt.Println(sEnc)
+
+  encodeWriteFile, err := os.Create(encodeFileName)
+
+  if err != nil {
+     panic(err)
+  }
+  defer encodeWriteFile.Close()
+
+  encodeWriteFile.Write([]byte(sEnc))
+  encodeWriteFile.Close()
+
+
+}
+
+func getToken(decode bool) string {
+
+  encodeFileName := fmt.Sprintf("%s/tmp/.sun.token", os.Getenv("HOME"))
+
+  encodeReadFile, openErr := os.Open(encodeFileName)
+
+  if(openErr == nil){
+
+    byteValue, _ := ioutil.ReadAll(encodeReadFile)
+
+    stringValue := string(byteValue)
+
+    encodeReadFile.Close()
+
+    if(decode){
+      fmt.Println("decode it")
+      sDec, _ := base64.StdEncoding.DecodeString(stringValue)
+      stringValue = string(sDec)
+    }
+
+    return stringValue
+
+  }
+
+  return "notset"
+
+}
+
 func main() {
 
-  logmsg.SetLogFile("sun.log")
+  logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
+
+  logmsg.SetLogLevel(logmsg.Debug03)
+
+  logmsg.SetLogFile(logfile)
+
+  args := os.Args;
+
+  if(len(args) >=2){ // being used for other reasons than moving the camera
+
+    switch args[1]{
+      
+      case "auth":
+        buildAuthToken(args[2])
+
+      case "show":
+        fmt.Println("Token: ", getToken(false))
+
+      case "showdecoded":
+        fmt.Println("Token: ", getToken(true))
+
+
+      case "day":
+        fmt.Println("day move")
+        moveCamera(true)
+
+      case "night":
+        fmt.Println("night move")
+        moveCamera(false)
+
+      default:
+        help()
+
+    }
+
+    os.Exit(0)
+
+  }
+
+  if(getToken(false) == "notset"){
+    fmt.Println("Need auth token saved")
+    os.Exit(0)
+  }
 
   now := time.Now()
 
   timeRise, timeSet := getSunTimes()
 
-
-/*
-  fmt.Println("Now:", now)
-  fmt.Println("Now:", now.Unix())
-  fmt.Println("Sunrise:", timeRise)
-  fmt.Println("Sunrise:", timeRise.Unix())
-  fmt.Println("Sunset:", timeSet)
-  fmt.Println("Sunset:", timeSet.Unix())
-*/
- 
-  fmt.Println("Sunrise:", timeRise)
-  fmt.Println("Sunset:", timeSet)
+  logmsg.Print(logmsg.Info, "Sunrise: ", timeRise)
+  logmsg.Print(logmsg.Info, "Sunset: ", timeSet)
 
   // test for after sunrise
   if(now.After(timeRise) && now.Before(timeSet)){
 
-    fmt.Println("Sun has rose")
+    logmsg.Print(logmsg.Info, "Sun has rose")
 
+    moveCamera(true)
   }else{
 
-    fmt.Println("Sun has set")
+    moveCamera(false)
+    logmsg.Print(logmsg.Info, "Sun has set")
 
   }
 
