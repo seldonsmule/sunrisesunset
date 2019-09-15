@@ -13,6 +13,7 @@ import (
         "encoding/base64"
         "github.com/seldonsmule/logmsg"
         "github.com/seldonsmule/restapi"
+        "github.com/seldonsmule/securityspy"
 
 )
 
@@ -23,35 +24,15 @@ type RiseSet struct {
 
 }
 
-func moveCamera(bSunRise bool){
-
-   //r := restapi.NewGet("sunriseset", "https://macdaddy.home.c-the-world.org:8001/++ptz/command?cameraNum=3&command=12")
-  // r := restapi.NewGet("sunriseset", "https://192.168.2.39:8001/++ptz/command?cameraNum=3&command=17")
-
-  url := "https://macdaddy.home.c-the-world.org:8001/++ptz/command?cameraNum=3&command="
-
+func moveCamera(ss *securityspy.SecuritySpy, bSunRise bool){
 
   if(bSunRise){
+    ss.PresetPTZ(3, 1)
     fmt.Println("Sun rise - moving camera to street")
 
-    url = fmt.Sprintf("%s12", url)
   }else{
+    ss.PresetPTZ(3, 6)
     fmt.Println("Sun set - moving camera to garage")
-    url = fmt.Sprintf("%s17", url)
-  }
-
-  r := restapi.NewGet("sunriseset", url)
-
-  r.SetBasicAccessToken(getToken(false))
-
-  //r.DebugOn()
-
-  restapi.TurnOffCertValidation()
-
-  if(r.Send()){
-
-    //r.Dump()
-
   }
 
 }
@@ -236,6 +217,7 @@ func help(){
   fmt.Println("sunsetrise [options] [auth userid:password] | [show] | [day] | [\n")
   fmt.Println("With no parms - execute sunrise/set test and camera move\n")
   fmt.Println("auth userid:password - Base64 encodes and saves userid and password\n");
+  fmt.Println("buildconfig url userid:password")
   fmt.Println("day - Move camera to day possition\n");
   fmt.Println("night - Move camera to night possition\n");
   fmt.Println("help - Display this\n");
@@ -295,6 +277,8 @@ func getToken(decode bool) string {
 func main() {
 
   logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
+  configfile := fmt.Sprintf("%s/tmp/.sun.conf", os.Getenv("HOME"))
+  encryptkey := "1234567890AbcDeF"
 
   logmsg.SetLogLevel(logmsg.Debug03)
 
@@ -305,24 +289,42 @@ func main() {
   if(len(args) >=2){ // being used for other reasons than moving the camera
 
     switch args[1]{
-      
-      case "auth":
-        buildAuthToken(args[2])
 
       case "show":
-        fmt.Println("Token: ", getToken(false))
+        ss := securityspy.NewEncrypt(configfile, encryptkey)
+        if( ss != nil){
+          ss.DumpConfig()
+        }else{
+          fmt.Println("Missing config file - use buildconfig")
+        }
 
-      case "showdecoded":
-        fmt.Println("Token: ", getToken(true))
-
+      case "buildconfig":
+        if(len(args) == 4){
+          fmt.Println("Build config")
+          ss := securityspy.NewBuildConfigEncrypt(args[2], args[3], configfile,
+                                                encryptkey)
+          ss.DumpConfig()
+        }else{
+          help()
+        }
 
       case "day":
         fmt.Println("day move")
-        moveCamera(true)
+        ss := securityspy.NewEncrypt(configfile, encryptkey)
+        if( ss != nil){
+          moveCamera(ss, true)
+        }else{
+          fmt.Println("Missing config file - use buildconfig")
+        }
 
       case "night":
         fmt.Println("night move")
-        moveCamera(false)
+        ss := securityspy.NewEncrypt(configfile, encryptkey)
+        if( ss != nil){
+          moveCamera(ss, false)
+        }else{
+          fmt.Println("Missing config file - use buildconfig")
+        }
 
       default:
         help()
@@ -333,8 +335,10 @@ func main() {
 
   }
 
-  if(getToken(false) == "notset"){
-    fmt.Println("Need auth token saved")
+  ss := securityspy.NewEncrypt(configfile, encryptkey)
+
+  if(ss == nil){
+    fmt.Println("Config file not created - use buildconfig")
     os.Exit(0)
   }
 
@@ -350,10 +354,10 @@ func main() {
 
     logmsg.Print(logmsg.Info, "Sun has rose")
 
-    moveCamera(true)
+   moveCamera(ss,true)
   }else{
 
-    moveCamera(false)
+    moveCamera(ss,false)
     logmsg.Print(logmsg.Info, "Sun has set")
 
   }
