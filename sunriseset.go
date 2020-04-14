@@ -24,6 +24,74 @@ type RiseSet struct {
 
 }
 
+func testLockfile() bool {
+
+  lockfile := fmt.Sprintf("%s/tmp/sun.lck", os.Getenv("HOME"))
+
+  _, statErr := os.Stat(lockfile)
+
+  if(os.IsNotExist(statErr)){
+    return false
+  }
+
+  return true;
+
+}
+
+func deleteLockfile(){
+
+  lockfile := fmt.Sprintf("%s/tmp/sun.lck", os.Getenv("HOME"))
+
+  _, statErr := os.Stat(lockfile)
+
+  // if lock file already exist - just log it and exit
+  if(statErr == nil){
+
+    //fmt.Println("Lockfile ", lockfile, " created: ",info.ModTime())
+    os.Remove(lockfile);
+
+    return;
+
+  }else{
+    fmt.Println("Lockfile already deleted");
+  }
+
+}
+
+func createLockfile(){
+
+  lockfile := fmt.Sprintf("%s/tmp/sun.lck", os.Getenv("HOME"))
+
+  info, statErr := os.Stat(lockfile)
+
+  // if lock file already exist - just log it and exit
+  if(statErr == nil){
+
+    fmt.Println("Lockfile ", lockfile, " created: ",info.ModTime())
+
+    return;
+
+  }
+
+  // otherwise create it
+
+  lockWriteFile, openErr := os.Create(lockfile)
+
+  if(openErr != nil){
+
+    fmt.Println("Error creating lockfile: ", lockfile );
+
+    return;
+
+  }
+
+  fmt.Println("Created lockfile: ", lockfile );
+
+  lockWriteFile.Close()
+
+
+}
+
 func moveCamera(ss *securityspy.SecuritySpy, bSunRise bool){
 
   if(bSunRise){
@@ -220,6 +288,8 @@ func help(){
   fmt.Println("buildconfig url userid:password")
   fmt.Println("day - Move camera to day possition\n");
   fmt.Println("night - Move camera to night possition\n");
+  fmt.Println("lock - Creates lockfile to disable time logic\n");
+  fmt.Println("unlock - Deletes lockfile to renable time logic\n");
   fmt.Println("help - Display this\n");
   
 
@@ -290,6 +360,14 @@ func main() {
 
     switch args[1]{
 
+      case "lock":
+        fmt.Println("Locking time logic - use unlock to restore");
+        createLockfile();
+
+      case "unlock":
+        fmt.Println("Removing lock time logic - going back to normal operations");
+        deleteLockfile();
+
       case "show":
         ss := securityspy.NewEncrypt(configfile, encryptkey)
         if( ss != nil){
@@ -332,6 +410,15 @@ func main() {
     }
 
     os.Exit(0)
+
+  }
+
+  if(testLockfile()){
+
+    fmt.Println("Stopping logic - lockfile exist - use unlock to remove");
+    logmsg.Print(logmsg.Info, "Stopping logic - lockfile exist - use unlock to remove");
+
+    os.Exit(0);
 
   }
 
