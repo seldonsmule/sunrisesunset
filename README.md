@@ -14,7 +14,6 @@ It is a simple tool that's main function is to move a PTZ camera between two pre
 ## Commands and options:
 
 -cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]
-
 	Builds the conf file
 
 -cmd movecamera -camera num -preset num 
