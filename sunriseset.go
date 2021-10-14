@@ -8,6 +8,7 @@ import (
         "strings"
         "strconv"
         "os"
+        "flag"
         "io/ioutil"
         "encoding/json"
         "encoding/base64"
@@ -92,16 +93,23 @@ func createLockfile(){
 
 }
 
-func moveCamera(ss *securityspy.SecuritySpy, bSunRise bool){
+func moveCamera(ss *securityspy.SecuritySpy, nCameraNum int, nPresetNum int){
 
+    ss.PresetPTZ(nCameraNum, nPresetNum)
+    fmt.Printf("moving camera[%d] to preset[%d]\n", nCameraNum, nPresetNum)
+
+/*
   if(bSunRise){
-    ss.PresetPTZ(3, 1)
-    fmt.Println("Sun rise - moving camera to street")
+    //ss.PresetPTZ(3, 1)
+    ss.PresetPTZ(nCameraNum, nPresetNum)
+    fmt.Println("Sun rise - moving camera")
 
   }else{
-    ss.PresetPTZ(3, 6)
-    fmt.Println("Sun set - moving camera to garage")
+    //ss.PresetPTZ(3, 6)
+    ss.PresetPTZ(nCameraNum, nPresetNum)
+    fmt.Println("Sun set - moving camera")
   }
+*/
 
 }
 
@@ -282,15 +290,32 @@ func getSunTimes() (time.Time, time.Time) {
 
 func help(){
 
-  fmt.Println("sunsetrise [options] [auth userid:password] | [show] | [day] | [\n")
-  fmt.Println("With no parms - execute sunrise/set test and camera move\n")
-  fmt.Println("auth userid:password - Base64 encodes and saves userid and password\n");
-  fmt.Println("buildconfig url userid:password")
-  fmt.Println("day - Move camera to day possition\n");
-  fmt.Println("night - Move camera to night possition\n");
-  fmt.Println("lock - Creates lockfile to disable time logic\n");
-  fmt.Println("unlock - Deletes lockfile to renable time logic\n");
-  fmt.Println("help - Display this\n");
+  fmt.Println("sunrisesunset allows you to control a camera that is under")
+  fmt.Println("SecuritySpy control via its web interface.  Before using you will need to")
+  fmt.Println("do the following:")
+  fmt.Printf("\n")
+  fmt.Printf("\t1. Use the buildconfig cmd to set up a config file. Default location is in $HOME/tmp\n")
+  fmt.Printf("\n")
+  fmt.Printf("\t2. Go into SecuritySpy and get the camera number and the preset PTZ numbers\n")
+  fmt.Printf("\n")
+  fmt.Printf("\t3. Use the daynight cmd (in cron is best) to move the cameras based on time of day\n")
+  fmt.Printf("\n")
+
+  fmt.Println("Commands and options:\n")
+  fmt.Println("-cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]")
+  fmt.Println("\tBuilds the conf file")
+  fmt.Println("-cmd show");
+  fmt.Println("\tShow contents of config file")
+  fmt.Println("-cmd movecamera -camera num -preset num ")
+  fmt.Println("\tMoves a camera to a PTZ preset")
+  fmt.Println("-cmd daynight -camera num -presetday num -presetnight num")
+  fmt.Println("\tDepending on time of day moves camera between PTZ 2 presets")
+  fmt.Println("-cmd lock");
+  fmt.Println("\tCreates lockfile to disable time logic");
+  fmt.Println("-cmd unlock");
+  fmt.Println("\tDeletes lockfile to renable time logic");
+  fmt.Println("-cmd help");
+  fmt.Println("\tDisplay this help message");
   
 
 }
@@ -344,89 +369,22 @@ func getToken(decode bool) string {
 
 }
 
-func main() {
-
-  logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
-  configfile := fmt.Sprintf("%s/tmp/.sun.conf", os.Getenv("HOME"))
-  encryptkey := "1234567890AbcDeF"
-
-  logmsg.SetLogLevel(logmsg.Debug03)
-
-  logmsg.SetLogFile(logfile)
-
-  args := os.Args;
-
-  if(len(args) >=2){ // being used for other reasons than moving the camera
-
-    switch args[1]{
-
-      case "lock":
-        fmt.Println("Locking time logic - use unlock to restore");
-        createLockfile();
-
-      case "unlock":
-        fmt.Println("Removing lock time logic - going back to normal operations");
-        deleteLockfile();
-
-      case "show":
-        ss := securityspy.NewEncrypt(configfile, encryptkey)
-        if( ss != nil){
-          ss.DumpConfig()
-        }else{
-          fmt.Println("Missing config file - use buildconfig")
-        }
-
-      case "buildconfig":
-        if(len(args) == 4){
-          fmt.Println("Build config")
-          ss := securityspy.NewBuildConfigEncrypt(args[2], args[3], configfile,
-                                                encryptkey)
-          ss.DumpConfig()
-        }else{
-          help()
-        }
-
-      case "day":
-        fmt.Println("day move")
-        ss := securityspy.NewEncrypt(configfile, encryptkey)
-        if( ss != nil){
-          moveCamera(ss, true)
-        }else{
-          fmt.Println("Missing config file - use buildconfig")
-        }
-
-      case "night":
-        fmt.Println("night move")
-        ss := securityspy.NewEncrypt(configfile, encryptkey)
-        if( ss != nil){
-          moveCamera(ss, false)
-        }else{
-          fmt.Println("Missing config file - use buildconfig")
-        }
-
-      default:
-        help()
-
-    }
-
-    os.Exit(0)
-
-  }
+func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nightpreset int) {
 
   if(testLockfile()){
 
     fmt.Println("Stopping logic - lockfile exist - use unlock to remove");
     logmsg.Print(logmsg.Info, "Stopping logic - lockfile exist - use unlock to remove");
 
-    os.Exit(0);
+    return
 
   }
 
-  ss := securityspy.NewEncrypt(configfile, encryptkey)
+  ss := securityspy.NewEncrypt(conf, encryptkey)
 
   if(ss == nil){
     fmt.Println("Config file not created - use buildconfig")
-    os.Exit(0)
+    return
   }
 
   now := time.Now()
@@ -441,14 +399,132 @@ func main() {
 
     logmsg.Print(logmsg.Info, "Sun has rose")
 
-   moveCamera(ss,true)
+    moveCamera(ss, camera, daypreset)
   }else{
 
-    moveCamera(ss,false)
+    moveCamera(ss, camera, nightpreset)
     logmsg.Print(logmsg.Info, "Sun has set")
 
   }
 
+  return
+
+}
+
+func main() {
+
+  logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
+  configfile := fmt.Sprintf("%s/tmp/.sun.conf", os.Getenv("HOME"))
+  encryptkey := "1234567890AbcDeF"
+
+  cmdPtr := flag.String("cmd", "help", "Command to run")
+  idandpassPtr := flag.String("idandpass", "notset", "SecuritySpy web userid:password")
+  urlPtr := flag.String("url", "notset", "url of SecuritySpy webserver")
+  confPtr := flag.String("conffile", configfile, "path and name of configfile")
+
+  cameraPtr := flag.Int("camera", 0, "SecuritySpy camera number")
+  presetPtr := flag.Int("preset", 0, "SecuritySpy preset number")
+
+  daypresetPtr := flag.Int("daypreset", 2, "SecuritySpy preset number for day")
+  nightpresetPtr := flag.Int("nightpreset", 1, "SecuritySpy preset number for night")
+
+  flag.Parse()
+
+  if(*cmdPtr == "help"){
+    help()
+    os.Exit(1)
+  }
+
+
+  logmsg.SetLogLevel(logmsg.Debug03)
+
+  logmsg.SetLogFile(logfile)
+
+  logmsg.Print(logmsg.Info, "cmdPtr = ", *cmdPtr)
+  logmsg.Print(logmsg.Info, "idandpassPtr = ", *idandpassPtr)
+  logmsg.Print(logmsg.Info, "urlPtr = ", *urlPtr)
+  logmsg.Print(logmsg.Info, "confPtr = ", *confPtr)
+  logmsg.Print(logmsg.Info, "cameraPtr = ", *cameraPtr)
+  logmsg.Print(logmsg.Info, "presetPtr = ", *presetPtr)
+  logmsg.Print(logmsg.Info, "daypresetPtr = ", *daypresetPtr)
+  logmsg.Print(logmsg.Info, "nightpresetPtr = ", *nightpresetPtr)
+  logmsg.Print(logmsg.Info, "tail = ", flag.Args())
+
+  switch *cmdPtr {
+
+    case "show":
+      ss := securityspy.NewEncrypt(*confPtr, encryptkey)
+      if( ss != nil){
+        ss.DumpConfig()
+      }else{
+        fmt.Println("Missing config file - use buildconfig")
+      }
+
+    case "buildconfig":
+      fmt.Println("Build config")
+
+      if(*urlPtr == "notset"){
+        fmt.Println("Err:  Missing url paramater")
+        os.Exit(2)
+      }
+
+      if(*idandpassPtr == "notset"){
+        fmt.Println("Err:  Missing idandpass paramater")
+        os.Exit(2)
+      }
+
+      ss := securityspy.NewBuildConfigEncrypt(*urlPtr, *idandpassPtr, *confPtr,
+                                              encryptkey)
+      ss.DumpConfig()
+
+    case "movecamera":
+      fmt.Println("Move Camera")
+
+      if(*cameraPtr == 0){
+        fmt.Println("Err:  Missing camera paramater")
+        os.Exit(2)
+      }
+
+      if(*presetPtr == 0){
+        fmt.Println("Err:  Missing preset paramater")
+        os.Exit(2)
+      }
+
+      ss := securityspy.NewEncrypt(*confPtr, encryptkey)
+      if( ss != nil){
+        moveCamera(ss, *cameraPtr, *presetPtr)
+      }else{
+        fmt.Println("Missing config file - use buildconfig")
+      }
+
+    case "daynight":
+      fmt.Println("Day/night test move logic")
+
+      if(*cameraPtr == 0){
+        fmt.Println("Err:  Missing camera paramater")
+        os.Exit(2)
+      }
+
+      moveDayNight(*confPtr, encryptkey, *cameraPtr, *daypresetPtr, 
+                   *nightpresetPtr)
+
+    case "lock":
+      fmt.Println("Locking time logic - use unlock to restore");
+      createLockfile();
+
+    case "unlock":
+      fmt.Println("Removing lock time logic - going back to normal operations");
+      deleteLockfile();
+
+    case "help":
+      help()
+      os.Exit(0)
+
+    default:
+      help()
+      os.Exit(2)
+
+  } // end switch
 
 
 }

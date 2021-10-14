@@ -16,7 +16,7 @@ clean:
 	echo $(SUNBIN)
 	rm -f $(SUNBIN)
 
-$(SUNBIN): $(LOGMSG) sunriseset.go
+$(SUNBIN): sunriseset.go
 	go build -o $(sunname)
 	go install
 
