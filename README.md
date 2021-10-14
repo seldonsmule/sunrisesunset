@@ -3,7 +3,7 @@ This tool allows the user to control a camera that is being managed by [Bensoft'
 
 It is a simple tool that's main function is to move a PTZ camera between two preset PTZ points for a day look and a night look
 
-##Before using you will need to do the following:
+## Before using you will need to do the following:
 
 	1. Use the buildconfig cmd to set up a config file. Default location is in $HOME/tmp
 
@@ -11,10 +11,12 @@ It is a simple tool that's main function is to move a PTZ camera between two pre
 
 	3. Use the daynight cmd (in cron is best) to move the cameras based on time of day
 
-##Commands and options:
+## Commands and options:
 
 -cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]
+
 	Builds the conf file
+
 -cmd movecamera -camera num -preset num 
 	Moves a camera to a PTZ preset
 -cmd daynight -camera num -presetday num -presetnight num
