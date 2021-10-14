@@ -13,16 +13,22 @@ It is a simple tool that's main function is to move a PTZ camera between two pre
 
 ## Commands and options:
 
+```
 -cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]
 	Builds the conf file
 
 -cmd movecamera -camera num -preset num 
 	Moves a camera to a PTZ preset
+
 -cmd daynight -camera num -presetday num -presetnight num
 	Depending on time of day moves camera between PTZ 2 presets
+
 -cmd lock
 	Creates lockfile to disable time logic
+
 -cmd unlock
 	Deletes lockfile to renable time logic
+
 -cmd help
 	Display this help message
+```
