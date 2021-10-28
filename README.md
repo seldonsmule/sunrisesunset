@@ -7,15 +7,20 @@ It is a simple tool that's main function is to move a PTZ camera between two pre
 
 	1. Use the buildconfig cmd to set up a config file. Default location is in $HOME/tmp
 
-	2. Go into SecuritySpy and get the camera number and the preset PTZ numbers
+	2. Use the setweather cmd to set up a weather config file with zipcode and developer.here.com apikey to get the sunrise and sunset info
 
-	3. Use the daynight cmd (in cron is best) to move the cameras based on time of day
+	3. Go into SecuritySpy and get the camera number and the preset PTZ numbers
+
+	4. Use the daynight cmd (in cron is best) to move the cameras based on time of day
 
 ## Commands and options:
 
 ```
 -cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]
 	Builds the conf file
+
+-cmd setweather -hereapikey key -zipcode localzip
+	Builds the weather conf file.  You need an api key from developer.here.com to setup and use
 
 -cmd movecamera -camera num -preset num 
 	Moves a camera to a PTZ preset
