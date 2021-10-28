@@ -8,6 +8,7 @@ import (
         "strings"
         "strconv"
         "os"
+        "bytes"
         "flag"
         "io/ioutil"
         "encoding/json"
@@ -24,6 +25,123 @@ type RiseSet struct {
   timeSet time.Time
 
 }
+
+type WeatherConf struct { // info for using the developer.here.com API
+
+  ApiKey  string
+  ZipCode string
+  Url string
+
+  confFile string
+  dataFound bool
+
+}
+
+func NewWeather() *WeatherConf{
+
+  w := new(WeatherConf)
+
+  w.confFile = fmt.Sprintf("%s/tmp/.developer.here.com.json", os.Getenv("HOME"))
+
+  w.dataFound = false
+
+  return w
+
+}
+
+func (pW *WeatherConf) SetWeather(apikey string, zipcode string) {
+
+  pW.ApiKey = apikey
+  pW.ZipCode = zipcode
+  pW.Url = "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy"
+
+  pW.dataFound = true
+}
+
+func (pW *WeatherConf) CompleteUrl() string{
+
+  return(fmt.Sprintf("%s&zipcode=%s&apikey=%s", pW.Url, pW.ZipCode,
+                                                 pW.ApiKey))
+
+}
+
+func (pW *WeatherConf) ReadConf() bool{
+
+  pW.dataFound = false
+
+  file, err := os.Open(pW.confFile) // for read access
+
+  if (err != nil){
+    logmsg.Print(logmsg.Debug03,"Unable to open configfile: ", err," ", pW.confFile)
+
+     //fmt.Println("Unable to read confifile: ", err, " ", pW.confFile)
+    return false
+  }
+
+  defer file.Close()
+
+  data := make([]byte, 1000)
+
+  count, err := file.Read(data)
+
+  if err != nil {
+     logmsg.Print(logmsg.Error,"Unable to read config: ", err, count)
+     return false
+  }
+
+  err = json.NewDecoder(bytes.NewReader(data)).Decode(pW)
+
+  if err != nil {
+     logmsg.Print(logmsg.Error,"Unable to decode config: ", err)
+     return false
+  }
+
+
+  pW.dataFound = true
+
+  return true
+}
+
+func (pW *WeatherConf) SaveConf() bool{
+
+  j, err := json.Marshal(pW)
+
+  if(err != nil){
+    fmt.Println(err)
+    return false
+  }
+
+  writeFile, err := os.Create(pW.confFile)
+
+  if err != nil {
+     logmsg.Print(logmsg.Error,"Unable to write config: ", err)
+     fmt.Println("Unable to write config: ", err)
+     return false
+  }
+
+  defer writeFile.Close()
+
+  writeFile.Write(j)
+  writeFile.Close()
+
+  return true
+
+}
+
+func (pW *WeatherConf) Dump(){
+
+  fmt.Println("Dumping Weather")
+
+  fmt.Println("ApiKey: ", pW.ApiKey)
+  fmt.Println("ZipCode: ", pW.ZipCode)
+  fmt.Println("Url: ", pW.Url)
+  fmt.Println("CompleteUrl: ", pW.CompleteUrl())
+
+
+}
+
+
+
 
 func testLockfile() bool {
 
@@ -113,13 +231,17 @@ func moveCamera(ss *securityspy.SecuritySpy, nCameraNum int, nPresetNum int){
 
 }
 
-func getSunTimes() (time.Time, time.Time) {
+func getSunTimes(pW *WeatherConf) (time.Time, time.Time) {
 
   var astroMap map[string]interface{}
 
   jsonfile := fmt.Sprintf("%s/tmp/sun.json", os.Getenv("HOME"))
 
   info, statErr := os.Stat(jsonfile)
+
+  // logic so we don't call the API to much and run up the
+  // counter on number of calls beyond the free tier
+  // we call it once a day
 
   if(statErr == nil){
 
@@ -152,7 +274,13 @@ func getSunTimes() (time.Time, time.Time) {
 
    logmsg.Print(logmsg.Info,"Need new cache file: ", jsonfile)
 
-   r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
+   // This API comes from developer.here.com.  You will need to get your own
+   // apikey
+   //
+   //r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&name=DC&app_id=DemoAppId01082013GAL&app_code=AJKnXv84fjrb0KIHawS0Tg")
+//   r := restapi.NewGet("sunriseset", "https://weather.cit.api.here.com/weather/1.0/report.json?product=forecast_astronomy&zipcode=33914&apikey=oXDrTYi4vcE3_yddC5HxAewFzDib4FnBNZRuFbBR2d0")
+
+   r := restapi.NewGet("sunriseset", pW.CompleteUrl())
 
 
 //  r.DebugOn()
@@ -296,16 +424,22 @@ func help(){
   fmt.Printf("\n")
   fmt.Printf("\t1. Use the buildconfig cmd to set up a config file. Default location is in $HOME/tmp\n")
   fmt.Printf("\n")
-  fmt.Printf("\t2. Go into SecuritySpy and get the camera number and the preset PTZ numbers\n")
+  fmt.Printf("\t2. Use the setweather cmd to set up a weather file. \n")
   fmt.Printf("\n")
-  fmt.Printf("\t3. Use the daynight cmd (in cron is best) to move the cameras based on time of day\n")
+  fmt.Printf("\t3. Go into SecuritySpy and get the camera number and the preset PTZ numbers\n")
+  fmt.Printf("\n")
+  fmt.Printf("\t4. Use the daynight cmd (in cron is best) to move the cameras based on time of day\n")
   fmt.Printf("\n")
 
   fmt.Println("Commands and options:\n")
   fmt.Println("-cmd buildconfig -url urlname -idandpass userid:password [-conffile path/name]")
-  fmt.Println("\tBuilds the conf file")
+  fmt.Println("\tBuilds the camera conf file")
+  fmt.Println("-cmd setweather -hereapikey key -zipcode localzip")
+  fmt.Println("\tBuilds the weather conf file.  You need an api key from developer.here.com to setup and use")
   fmt.Println("-cmd show");
-  fmt.Println("\tShow contents of config file")
+  fmt.Println("\tShow contents of config files")
+  fmt.Println("-cmd printtimes");
+  fmt.Println("\tDisplays sunrise/sunset times")
   fmt.Println("-cmd movecamera -camera num -preset num ")
   fmt.Println("\tMoves a camera to a PTZ preset")
   fmt.Println("-cmd daynight -camera num -presetday num -presetnight num")
@@ -369,7 +503,15 @@ func getToken(decode bool) string {
 
 }
 
-func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nightpreset int) {
+func printTimes(pW *WeatherConf){
+
+  timeRise, timeSet := getSunTimes(pW)
+
+  fmt.Println("Sunrise: ", timeRise)
+  fmt.Println("Sunset: ", timeSet)
+}
+
+func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nightpreset int, pW *WeatherConf) {
 
   if(testLockfile()){
 
@@ -389,7 +531,7 @@ func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nig
 
   now := time.Now()
 
-  timeRise, timeSet := getSunTimes()
+  timeRise, timeSet := getSunTimes(pW)
 
   logmsg.Print(logmsg.Info, "Sunrise: ", timeRise)
   logmsg.Print(logmsg.Info, "Sunset: ", timeSet)
@@ -413,12 +555,15 @@ func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nig
 
 func main() {
 
+
   logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
   configfile := fmt.Sprintf("%s/tmp/.sun.conf", os.Getenv("HOME"))
   encryptkey := "1234567890AbcDeF"
 
   cmdPtr := flag.String("cmd", "help", "Command to run")
   idandpassPtr := flag.String("idandpass", "notset", "SecuritySpy web userid:password")
+  zipPtr := flag.String("zipcode", "notset", "Zipcode for sunrise/sunset")
+  hereApiKeyPtr := flag.String("hereapikey", "notset", "developer.here.com apikey used for the weather check")
   urlPtr := flag.String("url", "notset", "url of SecuritySpy webserver")
   confPtr := flag.String("conffile", configfile, "path and name of configfile")
 
@@ -427,6 +572,9 @@ func main() {
 
   daypresetPtr := flag.Int("daypreset", 2, "SecuritySpy preset number for day")
   nightpresetPtr := flag.Int("nightpreset", 1, "SecuritySpy preset number for night")
+
+  WConf := NewWeather()
+  WConf.ReadConf()
 
   flag.Parse()
 
@@ -442,6 +590,8 @@ func main() {
 
   logmsg.Print(logmsg.Info, "cmdPtr = ", *cmdPtr)
   logmsg.Print(logmsg.Info, "idandpassPtr = ", *idandpassPtr)
+  logmsg.Print(logmsg.Info, "zipPtr = ", *zipPtr)
+  logmsg.Print(logmsg.Info, "hereApiKeyPtr = ", *hereApiKeyPtr)
   logmsg.Print(logmsg.Info, "urlPtr = ", *urlPtr)
   logmsg.Print(logmsg.Info, "confPtr = ", *confPtr)
   logmsg.Print(logmsg.Info, "cameraPtr = ", *cameraPtr)
@@ -460,6 +610,33 @@ func main() {
         fmt.Println("Missing config file - use buildconfig")
       }
 
+      if(WConf.dataFound){
+        WConf.Dump()
+      }else{
+        fmt.Println("ERROR-> Weather Conf data not found")
+      }
+
+    case "printtimes":
+      printTimes(WConf)
+
+    case "setweather":
+      if(*hereApiKeyPtr == "notset"){
+        fmt.Println("Err:  Missing hereapikey paramater")
+        os.Exit(2)
+      }
+
+      if(*zipPtr == "notset"){
+        fmt.Println("Err:  Missing zipcode paramater")
+        os.Exit(2)
+      }
+
+      WConf.SetWeather(*hereApiKeyPtr, *zipPtr)
+      WConf.Dump()
+      if(!WConf.SaveConf()){
+        fmt.Println("Err: Unable to save weather file")
+        os.Exit(2)
+      }
+
     case "buildconfig":
       fmt.Println("Build config")
 
@@ -472,6 +649,7 @@ func main() {
         fmt.Println("Err:  Missing idandpass paramater")
         os.Exit(2)
       }
+
 
       ss := securityspy.NewBuildConfigEncrypt(*urlPtr, *idandpassPtr, *confPtr,
                                               encryptkey)
@@ -498,6 +676,12 @@ func main() {
       }
 
     case "daynight":
+
+      if(!WConf.dataFound){
+        fmt.Println("Err: Missing Weather Conf data - Use -cmd setweather")
+        os.Exit(2)
+      }
+
       fmt.Println("Day/night test move logic")
 
       if(*cameraPtr == 0){
@@ -506,7 +690,7 @@ func main() {
       }
 
       moveDayNight(*confPtr, encryptkey, *cameraPtr, *daypresetPtr, 
-                   *nightpresetPtr)
+                   *nightpresetPtr, WConf)
 
     case "lock":
       fmt.Println("Locking time logic - use unlock to restore");
