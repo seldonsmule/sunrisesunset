@@ -1,12 +1,19 @@
 module github.com/seldonsmule/sunrisesunset
 
-go 1.16
+go 1.19
 
 require (
-	github.com/denisbrodbeck/machineid v1.0.1 // indirect
-	github.com/mattn/go-sqlite3 v1.14.8 // indirect
-	github.com/seldonsmule/logmsg v0.0.0-20210504192739-df66bdf17afb // indirect
-	github.com/seldonsmule/restapi v0.0.0-20210504210842-e53d63e16fd9 // indirect
-	github.com/seldonsmule/securityspy v0.0.0-20210505111624-540a5a7d7eda // indirect
-	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
+	github.com/seldonsmule/logmsg v0.0.0-20210504192739-df66bdf17afb
+	github.com/seldonsmule/restapi v0.0.0-20230121152404-8d586eff11b9
+	github.com/seldonsmule/securityspy v0.0.0-20210505111624-540a5a7d7eda
+)
+
+require (
+	github.com/basgys/goxml2json v1.1.0 // indirect
+	github.com/fatih/camelcase v1.0.0 // indirect
+	github.com/fatih/structtag v1.2.0 // indirect
+	github.com/twpayne/go-jsonstruct v1.2.0 // indirect
+	golang.org/x/net v0.0.0-20210504132125-bbd867fde50d // indirect
+	golang.org/x/text v0.3.6 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
