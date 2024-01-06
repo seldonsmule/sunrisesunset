@@ -21,8 +21,10 @@ import (
 
 type RiseSet struct {
 
-  timeRise time.Time
-  timeSet time.Time
+  LocationName string `json:"location_name"`
+
+  Sunrise int `json:"sunrise"`
+  Sunset int `json:"sunset"`
 
 }
 
@@ -35,18 +37,32 @@ type WeatherConf struct { // info for using the developer.here.com API
   confFile string
   dataFound bool
 
+  WeatherFlowUrl string
+  WeatherFlowStationId string
+  WeatherFlowToken string
+
 }
 
 func NewWeather() *WeatherConf{
 
   w := new(WeatherConf)
 
-  w.confFile = fmt.Sprintf("%s/tmp/.developer.here.com.json", os.Getenv("HOME"))
+  //w.confFile = fmt.Sprintf("%s/tmp/.developer.here.com.json", os.Getenv("HOME"))
+  w.confFile = fmt.Sprintf("%s/tmp/.sunriseset.json", os.Getenv("HOME"))
 
   w.dataFound = false
 
   return w
 
+}
+
+func (pW *WeatherConf) SetWeatherFlow(stationid string, token string) {
+
+  pW.WeatherFlowStationId = stationid
+  pW.WeatherFlowToken = token
+  pW.WeatherFlowUrl = "https://swd.weatherflow.com/swd/rest/better_forecast?station_id=" + stationid + "&token=" + token
+
+  pW.dataFound = true
 }
 
 func (pW *WeatherConf) SetWeather(apikey string, zipcode string) {
@@ -72,7 +88,7 @@ func (pW *WeatherConf) ReadConf() bool{
   file, err := os.Open(pW.confFile) // for read access
 
   if (err != nil){
-    logmsg.Print(logmsg.Debug03,"Unable to open configfile: ", err," ", pW.confFile)
+    logmsg.Print(logmsg.Error,"Unable to open configfile: ", err," ", pW.confFile)
 
      //fmt.Println("Unable to read confifile: ", err, " ", pW.confFile)
     return false
@@ -111,6 +127,8 @@ func (pW *WeatherConf) SaveConf() bool{
     return false
   }
 
+  fmt.Println("Saving config: ", pW.confFile)
+
   writeFile, err := os.Create(pW.confFile)
 
   if err != nil {
@@ -136,6 +154,9 @@ func (pW *WeatherConf) Dump(){
   fmt.Println("ZipCode: ", pW.ZipCode)
   fmt.Println("Url: ", pW.Url)
   fmt.Println("CompleteUrl: ", pW.CompleteUrl())
+  fmt.Println("WeatherFlowStationId: ", pW.WeatherFlowStationId)
+  fmt.Println("WeatherFlowToken: ", pW.WeatherFlowToken)
+  fmt.Println("WeatherFlowUrl: ", pW.WeatherFlowUrl)
 
 
 }
@@ -229,6 +250,104 @@ func moveCamera(ss *securityspy.SecuritySpy, nCameraNum int, nPresetNum int){
   }
 */
 
+}
+
+func getWeatherFlowSunTimes(pW *WeatherConf) (time.Time, time.Time) {
+
+  var forecast BetterForcast
+  var risesettimes RiseSet
+
+  timeRise := time.Now()
+  timeSet := time.Now()
+
+  jsonfile := fmt.Sprintf("%s/tmp/weatherflow.json", os.Getenv("HOME"))
+
+  info, statErr := os.Stat(jsonfile)
+
+  // logic so we don't call the API to much 
+  // we call it once a day
+
+  if(statErr == nil){
+
+    logmsg.Print(logmsg.Info, "Last ", jsonfile, " write - ",info.ModTime())
+
+    today := time.Now()
+
+    if(today.Day() != info.ModTime().Day()){
+      logmsg.Print(logmsg.Info, "not today - delete sun.json")
+      os.Remove(jsonfile)
+    }
+
+  }
+
+  jsonReadFile, openErr := os.Open(jsonfile)
+  
+
+  if(openErr == nil){
+
+    logmsg.Print(logmsg.Debug01, "found the file");
+    fmt.Println("jsonReadFile: ", jsonfile)
+
+    byteValue, _ := ioutil.ReadAll(jsonReadFile)
+
+    json.Unmarshal([]byte(byteValue), &risesettimes)
+
+    jsonReadFile.Close()
+
+    logmsg.Print(logmsg.Debug02, "risesettimes.LocationName: ", risesettimes.LocationName)
+
+  }else{
+
+   logmsg.Print(logmsg.Info,"Need new cache file: ", jsonfile)
+
+   // This API comes from weatherflow
+   //
+
+   r := restapi.NewGet("sunriseset", pW.WeatherFlowUrl)
+
+   r.JsonOnly()
+
+//  r.DebugOn()
+
+    if(r.Send()){
+
+   //   r.Dump()
+   //fmt.Println("r.Response: ", r.GetResponseBody())
+  
+    }
+
+    json.Unmarshal(r.BodyBytes, &forecast)
+
+    //fmt.Println("forecast: ", forecast)
+
+    fmt.Println("locationName: ", forecast.LocationName)
+
+    risesettimes.LocationName = forecast.LocationName
+    risesettimes.Sunrise = forecast.Forecast.Daily[0].Sunrise
+    risesettimes.Sunset = forecast.Forecast.Daily[0].Sunset
+
+    jsonData, _ := json.Marshal(risesettimes)
+
+    //fmt.Println(string(jsonData))
+
+    jsonWriteFile, err := os.Create(jsonfile)
+
+    if err != nil {
+       panic(err)
+    }
+    defer jsonWriteFile.Close()
+
+    jsonWriteFile.Write(jsonData)
+    jsonWriteFile.Close()
+
+  } //end else
+
+ 
+  timeRise = time.Unix(int64(risesettimes.Sunrise), 0)
+  timeSet = time.Unix(int64(risesettimes.Sunset), 0)
+
+
+  return timeRise, timeSet
 }
 
 func getSunTimes(pW *WeatherConf) (time.Time, time.Time) {
@@ -436,6 +555,8 @@ func help(){
   fmt.Println("\tBuilds the camera conf file")
   fmt.Println("-cmd setweather -hereapikey key -zipcode localzip")
   fmt.Println("\tBuilds the weather conf file.  You need an api key from developer.here.com to setup and use")
+  fmt.Println("-cmd setweatherflow -weatherstationid stationid -weatherstationtoken token")
+  fmt.Println("\tBuilds the weather conf file.  You need the station id and developer token from your WeatherFlow system.  Got to setup to find it.")
   fmt.Println("-cmd show");
   fmt.Println("\tShow contents of config files")
   fmt.Println("-cmd printtimes");
@@ -511,6 +632,14 @@ func printTimes(pW *WeatherConf){
   fmt.Println("Sunset: ", timeSet)
 }
 
+func printWeatherFlowTimes(pW *WeatherConf){
+
+  timeRise, timeSet := getWeatherFlowSunTimes(pW)
+
+  fmt.Println("Sunrise: ", timeRise)
+  fmt.Println("Sunset: ", timeSet)
+}
+
 func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nightpreset int, pW *WeatherConf) {
 
   if(testLockfile()){
@@ -531,7 +660,8 @@ func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nig
 
   now := time.Now()
 
-  timeRise, timeSet := getSunTimes(pW)
+//  timeRise, timeSet := getSunTimes(pW)
+  timeRise, timeSet := getWeatherFlowSunTimes(pW)
 
   logmsg.Print(logmsg.Info, "Sunrise: ", timeRise)
   logmsg.Print(logmsg.Info, "Sunset: ", timeSet)
@@ -555,6 +685,7 @@ func moveDayNight(conf string, encryptkey string, camera int, daypreset int, nig
 
 func main() {
 
+  fmt.Println("Sunrise/Sunset control for SecuritySpy")
 
   logfile := fmt.Sprintf("%s/tmp/sun.log", os.Getenv("HOME"))
   configfile := fmt.Sprintf("%s/tmp/.sun.conf", os.Getenv("HOME"))
@@ -567,6 +698,9 @@ func main() {
   urlPtr := flag.String("url", "notset", "url of SecuritySpy webserver")
   confPtr := flag.String("conffile", configfile, "path and name of configfile")
 
+  weatherStationIdPtr := flag.String("weatherstationid", "notset", "Weather station id to use for weather (see weatherflow app for info")
+  weatherStationTokenPtr := flag.String("weatherstationtoken", "notset", "Weather station token to use for weather (see weatherflow app for info")
+
   cameraPtr := flag.Int("camera", 0, "SecuritySpy camera number")
   presetPtr := flag.Int("preset", 0, "SecuritySpy preset number")
 
@@ -574,7 +708,20 @@ func main() {
   nightpresetPtr := flag.Int("nightpreset", 1, "SecuritySpy preset number for night")
 
   WConf := NewWeather()
-  WConf.ReadConf()
+  if(!WConf.ReadConf()){
+    fmt.Println("Error reading config file - initalizing instead\n\n")
+    WConf.SaveConf()
+    if(!WConf.ReadConf()){
+      fmt.Println("Error reading config file after initalizing - something is wrong\n\n")
+      os.Exit(1)
+    }
+  }
+  /*
+  if(!WConf.ReadConf()){
+    fmt.Println("Error reading config file\n\n")
+    os.Exit(1)
+  }
+  */
 
   flag.Parse()
 
@@ -594,6 +741,8 @@ func main() {
   logmsg.Print(logmsg.Info, "hereApiKeyPtr = ", *hereApiKeyPtr)
   logmsg.Print(logmsg.Info, "urlPtr = ", *urlPtr)
   logmsg.Print(logmsg.Info, "confPtr = ", *confPtr)
+  logmsg.Print(logmsg.Info, "weatherStationIdPtr = ", *weatherStationIdPtr)
+  logmsg.Print(logmsg.Info, "weatherStationTokenPtr = ", *weatherStationTokenPtr)
   logmsg.Print(logmsg.Info, "cameraPtr = ", *cameraPtr)
   logmsg.Print(logmsg.Info, "presetPtr = ", *presetPtr)
   logmsg.Print(logmsg.Info, "daypresetPtr = ", *daypresetPtr)
@@ -608,6 +757,7 @@ func main() {
         ss.DumpConfig()
       }else{
         fmt.Println("Missing config file - use buildconfig")
+	os.Exit(2)
       }
 
       if(WConf.dataFound){
@@ -618,6 +768,27 @@ func main() {
 
     case "printtimes":
       printTimes(WConf)
+
+    case "printweatherflowtimes":
+      printWeatherFlowTimes(WConf)
+
+    case "setweatherflow":
+      if(*weatherStationIdPtr == "notset"){
+        fmt.Println("Err:  Missing weatherstationid paramater")
+        os.Exit(2)
+      }
+
+      if(*weatherStationTokenPtr == "notset"){
+        fmt.Println("Err:  Missing weatherstationtoken paramater")
+        os.Exit(2)
+      }
+
+      WConf.SetWeatherFlow(*weatherStationIdPtr, *weatherStationTokenPtr)
+      WConf.Dump()
+      if(!WConf.SaveConf()){
+        fmt.Println("Err: Unable to save weather file")
+        os.Exit(2)
+      }
 
     case "setweather":
       if(*hereApiKeyPtr == "notset"){
