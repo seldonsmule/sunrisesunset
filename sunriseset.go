@@ -16,6 +16,7 @@ import (
         "github.com/seldonsmule/logmsg"
         "github.com/seldonsmule/restapi"
         "github.com/seldonsmule/securityspy"
+        "github.com/seldonsmule/tempest"
 
 )
 
@@ -254,8 +255,11 @@ func moveCamera(ss *securityspy.SecuritySpy, nCameraNum int, nPresetNum int){
 
 func getWeatherFlowSunTimes(pW *WeatherConf) (time.Time, time.Time) {
 
-  var forecast BetterForcast
+  //var forecast BetterForcast
   var risesettimes RiseSet
+
+  temp := tempest.New(pW.WeatherFlowToken, pW.WeatherFlowStationId)
+  temp.HelloWorld()
 
   timeRise := time.Now()
   timeSet := time.Now()
@@ -298,25 +302,14 @@ func getWeatherFlowSunTimes(pW *WeatherConf) (time.Time, time.Time) {
 
   }else{
 
-   logmsg.Print(logmsg.Info,"Need new cache file: ", jsonfile)
+    logmsg.Print(logmsg.Info,"Need new cache file: ", jsonfile)
 
-   // This API comes from weatherflow
-   //
+    worked, forecast := temp.GetBetterForecast()  
 
-   r := restapi.NewGet("sunriseset", pW.WeatherFlowUrl)
-
-   r.JsonOnly()
-
-//  r.DebugOn()
-
-    if(r.Send()){
-
-   //   r.Dump()
-   //fmt.Println("r.Response: ", r.GetResponseBody())
-  
+    if(!worked){
+      logmsg.Print(logmsg.Error,"Call to Weatherflow failed")
+      return timeRise, timeSet
     }
-
-    json.Unmarshal(r.BodyBytes, &forecast)
 
     //fmt.Println("forecast: ", forecast)
 
@@ -624,6 +617,7 @@ func getToken(decode bool) string {
 
 }
 
+// deprecated code
 func printTimes(pW *WeatherConf){
 
   timeRise, timeSet := getSunTimes(pW)
@@ -765,10 +759,12 @@ func main() {
       }else{
         fmt.Println("ERROR-> Weather Conf data not found")
       }
+/*
+      printTimes(WConf)
+*/
 
     case "printtimes":
-      printTimes(WConf)
-
+      fallthrough
     case "printweatherflowtimes":
       printWeatherFlowTimes(WConf)
 

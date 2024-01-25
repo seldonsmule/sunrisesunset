@@ -4,8 +4,9 @@ go 1.19
 
 require (
 	github.com/seldonsmule/logmsg v0.0.0-20210504192739-df66bdf17afb
-	github.com/seldonsmule/restapi v0.0.0-20230121152404-8d586eff11b9
-	github.com/seldonsmule/securityspy v0.0.0-20210505111624-540a5a7d7eda
+	github.com/seldonsmule/restapi v0.0.0-20230612184055-53702d7c0d72
+	github.com/seldonsmule/securityspy v0.0.0-20230307194638-487dce9e56bc
+	github.com/seldonsmule/tempest v0.0.0-20240123223146-a21031bbe566
 )
 
 require (
@@ -13,7 +14,7 @@ require (
 	github.com/fatih/camelcase v1.0.0 // indirect
 	github.com/fatih/structtag v1.2.0 // indirect
 	github.com/twpayne/go-jsonstruct v1.2.0 // indirect
-	golang.org/x/net v0.7.0 // indirect
-	golang.org/x/text v0.7.0 // indirect
+	golang.org/x/net v0.10.0 // indirect
+	golang.org/x/text v0.9.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
